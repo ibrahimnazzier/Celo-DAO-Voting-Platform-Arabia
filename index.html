@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Celo DAO Voting Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a0a2e 50%, #0a0a0a 100%);
+            min-height: 100vh;
+        }
+
+        .glass-card {
+            background: rgba(30, 0, 60, 0.4);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(168, 85, 247, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(168, 85, 247, 0.15);
+        }
+
+        .glass-card:hover {
+            border-color: rgba(168, 85, 247, 0.4);
+            box-shadow: 0 8px 48px 0 rgba(168, 85, 247, 0.25);
+            transform: translateY(-2px);
+            transition: all 0.3s ease;
+        }
+
+        .neon-glow {
+            box-shadow: 0 0 20px rgba(168, 85, 247, 0.5),
+                        0 0 40px rgba(168, 85, 247, 0.3),
+                        0 0 60px rgba(168, 85, 247, 0.2);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+            box-shadow: 0 4px 20px rgba(168, 85, 247, 0.4);
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 6px 30px rgba(168, 85, 247, 0.6);
+            transform: translateY(-2px);
+        }
+
+        .btn-yes {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4);
+        }
+
+        .btn-yes:hover {
+            box-shadow: 0 6px 30px rgba(16, 185, 129, 0.6);
+        }
+
+        .btn-no {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
+        }
+
+        .btn-no:hover {
+            box-shadow: 0 6px 30px rgba(239, 68, 68, 0.6);
+        }
+
+        .progress-bar-yes {
+            background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.6);
+        }
+
+        .progress-bar-no {
+            background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
+        }
+
+        .cyberpunk-border {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cyberpunk-border::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #a855f7, transparent);
+            animation: scan 3s linear infinite;
+        }
+
+        @keyframes scan {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        .pulse-animation {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .7; }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .status-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-weight: 600;
+        }
+
+        .status-active {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .sidebar {
+            background: rgba(10, 10, 10, 0.8);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid rgba(168, 85, 247, 0.2);
+        }
+    </style>
+</head>
+<body class="text-gray-100">
+    
+    <!-- Main Container -->
+    <div class="flex min-h-screen">
+        
+        <!-- Sidebar -->
+        <div class="sidebar w-64 p-6 fixed h-full">
+            <div class="mb-10">
+                <h1 class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+                    🗳️ Celo DAO
+                </h1>
+                <p class="text-xs text-gray-400 mt-1">Decentralized Voting</p>
+            </div>
+
+            <nav class="space-y-4">
+                <button id="navDashboard" class="w-full text-left px-4 py-3 rounded-lg bg-purple-600/20 text-purple-300 font-medium">
+                    📊 Dashboard
+                </button>
+                <button id="navHistory" class="w-full text-left px-4 py-3 rounded-lg text-gray-400 hover:bg-purple-600/10 hover:text-purple-300 transition-all">
+                    📜 History
+                </button>
+                <button id="navSettings" class="w-full text-left px-4 py-3 rounded-lg text-gray-400 hover:bg-purple-600/10 hover:text-purple-300 transition-all">
+                    ⚙️ Settings
+                </button>
+            </nav>
+
+            <div class="absolute bottom-6 left-6 right-6">
+                <button id="connectWalletBtn" class="btn-primary w-full px-4 py-3 rounded-xl font-semibold text-white transition-all">
+                    Connect Wallet
+                </button>
+                <div id="walletInfo" class="hidden mt-3 p-3 rounded-lg bg-purple-600/10 border border-purple-500/20">
+                    <p class="text-xs text-gray-400 mb-1">Connected</p>
+                    <p id="walletAddress" class="text-xs font-mono text-purple-300 truncate"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Area -->
+        <div class="ml-64 flex-1 p-8">
+            
+            <!-- Dashboard View -->
+            <div id="dashboardView">
+                <div class="mb-8">
+                    <h2 class="text-4xl font-bold text-white mb-2">Active Proposals</h2>
+                    <p class="text-gray-400">Vote on important governance decisions</p>
+                </div>
+
+                <!-- Proposals Grid -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6" id="proposalsGrid">
+                    
+                    <!-- Proposal Card 1 -->
+                    <div class="glass-card rounded-2xl p-6 cursor-pointer cyberpunk-border proposal-card" data-proposal-id="0">
+                        <div class="flex justify-between items-start mb-4">
+                            <span class="status-badge status-active">ACTIVE</span>
+                            <span class="text-sm text-gray-400">Proposal #1</span>
+                        </div>
+                        
+                        <h3 class="text-2xl font-bold text-white mb-3">Fund Project A: DeFi Integration</h3>
+                        <p class="text-gray-300 mb-4 leading-relaxed">
+                            Allocate $50,000 from the treasury to develop a comprehensive DeFi integration module for seamless cross-chain operations.
+                        </p>
+                        
+                        <div class="flex items-center justify-between text-sm">
+                            <div class="flex items-center space-x-4">
+                                <span class="text-green-400 font-semibold">✓ 245 Yes</span>
+                                <span class="text-red-400 font-semibold">✗ 89 No</span>
+                            </div>
+                            <span class="text-purple-400 font-semibold hover:text-purple-300">View Details →</span>
+                        </div>
+                    </div>
+
+                    <!-- Proposal Card 2 -->
+                    <div class="glass-card rounded-2xl p-6 cursor-pointer cyberpunk-border proposal-card" data-proposal-id="1">
+                        <div class="flex justify-between items-start mb-4">
+                            <span class="status-badge status-active">ACTIVE</span>
+                            <span class="text-sm text-gray-400">Proposal #2</span>
+                        </div>
+                        
+                        <h3 class="text-2xl font-bold text-white mb-3">Change Protocol Fee Structure</h3>
+                        <p class="text-gray-300 mb-4 leading-relaxed">
+                            Reduce transaction fees from 0.5% to 0.3% to improve competitiveness and attract more users to the platform.
+                        </p>
+                        
+                        <div class="flex items-center justify-between text-sm">
+                            <div class="flex items-center space-x-4">
+                                <span class="text-green-400 font-semibold">✓ 312 Yes</span>
+                                <span class="text-red-400 font-semibold">✗ 156 No</span>
+                            </div>
+                            <span class="text-purple-400 font-semibold hover:text-purple-300">View Details →</span>
+                        </div>
+                    </div>
+
+                    <!-- Proposal Card 3 -->
+                    <div class="glass-card rounded-2xl p-6 cursor-pointer cyberpunk-border proposal-card" data-proposal-id="2">
+                        <div class="flex justify-between items-start mb-4">
+                            <span class="status-badge status-active">ACTIVE</span>
+                            <span class="text-sm text-gray-400">Proposal #3</span>
+                        </div>
+                        
+                        <h3 class="text-2xl font-bold text-white mb-3">Marketing Campaign Budget</h3>
+                        <p class="text-gray-300 mb-4 leading-relaxed">
+                            Approve $30,000 budget for Q1 2026 marketing campaign focused on social media and community growth initiatives.
+                        </p>
+                        
+                        <div class="flex items-center justify-between text-sm">
+                            <div class="flex items-center space-x-4">
+                                <span class="text-green-400 font-semibold">✓ 198 Yes</span>
+                                <span class="text-red-400 font-semibold">✗ 203 No</span>
+                            </div>
+                            <span class="text-purple-400 font-semibold hover:text-purple-300">View Details →</span>
+                        </div>
+                    </div>
+
+                    <!-- Proposal Card 4 -->
+                    <div class="glass-card rounded-2xl p-6 cursor-pointer cyberpunk-border proposal-card" data-proposal-id="3">
+                        <div class="flex justify-between items-start mb-4">
+                            <span class="status-badge status-active">ACTIVE</span>
+                            <span class="text-sm text-gray-400">Proposal #4</span>
+                        </div>
+                        
+                        <h3 class="text-2xl font-bold text-white mb-3">Add New Governance Member</h3>
+                        <p class="text-gray-300 mb-4 leading-relaxed">
+                            Elect Alice Walker (0x742d...3f4a) as a new core governance member with voting rights on protocol upgrades.
+                        </p>
+                        
+                        <div class="flex items-center justify-between text-sm">
+                            <div class="flex items-center space-x-4">
+                                <span class="text-green-400 font-semibold">✓ 421 Yes</span>
+                                <span class="text-red-400 font-semibold">✗ 67 No</span>
+                            </div>
+                            <span class="text-purple-400 font-semibold hover:text-purple-300">View Details →</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- History View -->
+            <div id="historyView" class="hidden">
+                <div class="mb-8">
+                    <h2 class="text-4xl font-bold text-white mb-2">Voting History</h2>
+                    <p class="text-gray-400">View your past votes and proposal outcomes</p>
+                </div>
+
+                <div class="space-y-4">
+                    <!-- History Item 1 -->
+                    <div class="glass-card rounded-2xl p-6">
+                        <div class="flex justify-between items-start mb-3">
+                            <div>
+                                <h3 class="text-xl font-bold text-white mb-1">Fund Project A: DeFi Integration</h3>
+                                <p class="text-sm text-gray-400">Proposal #1 • Voted on Dec 1, 2025</p>
+                            </div>
+                            <span class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm font-semibold">✓ Voted YES</span>
+                        </div>
+                        <div class="flex items-center text-sm text-gray-300">
+                            <span class="text-green-400 mr-4">Final: 425 Yes</span>
+                            <span class="text-red-400">120 No</span>
+                            <span class="ml-auto text-purple-400">✓ PASSED</span>
+                        </div>
+                    </div>
+
+                    <!-- History Item 2 -->
+                    <div class="glass-card rounded-2xl p-6">
+                        <div class="flex justify-between items-start mb-3">
+                            <div>
+                                <h3 class="text-xl font-bold text-white mb-1">Change Protocol Fee Structure</h3>
+                                <p class="text-sm text-gray-400">Proposal #2 • Voted on Nov 28, 2025</p>
+                            </div>
+                            <span class="px-3 py-1 rounded-full bg-red-500/20 text-red-400 text-sm font-semibold">✗ Voted NO</span>
+                        </div>
+                        <div class="flex items-center text-sm text-gray-300">
+                            <span class="text-green-400 mr-4">Final: 512 Yes</span>
+                            <span class="text-red-400">256 No</span>
+                            <span class="ml-auto text-purple-400">✓ PASSED</span>
+                        </div>
+                    </div>
+
+                    <!-- No History State -->
+                    <div id="noHistoryMessage" class="hidden glass-card rounded-2xl p-12 text-center">
+                        <div class="text-6xl mb-4">📜</div>
+                        <h3 class="text-2xl font-bold text-white mb-2">No Voting History</h3>
+                        <p class="text-gray-400">You haven't voted on any proposals yet. Visit the dashboard to participate!</p>
+                        <button onclick="showDashboard()" class="mt-6 btn-primary px-6 py-3 rounded-xl font-semibold text-white transition-all">
+                            Go to Dashboard
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings View -->
+            <div id="settingsView" class="hidden">
+                <div class="mb-8">
+                    <h2 class="text-4xl font-bold text-white mb-2">Settings</h2>
+                    <p class="text-gray-400">Manage your preferences and account settings</p>
+                </div>
+
+                <div class="max-w-3xl space-y-6">
+                    <!-- Account Section -->
+                    <div class="glass-card rounded-2xl p-6">
+                        <h3 class="text-xl font-bold text-white mb-4">Account</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="text-sm text-gray-400 mb-2 block">Connected Wallet</label>
+                                <div class="flex items-center justify-between bg-black/30 rounded-lg p-3">
+                                    <span id="settingsWalletAddress" class="font-mono text-purple-300">Not Connected</span>
+                                    <button onclick="connectWallet()" class="text-sm text-purple-400 hover:text-purple-300">Reconnect</button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="text-sm text-gray-400 mb-2 block">Network</label>
+                                <div class="bg-black/30 rounded-lg p-3">
+                                    <span class="text-white">Celo Alfajores Testnet</span>
+                                    <span class="ml-2 text-xs text-green-400">● Connected</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Notifications Section -->
+                    <div class="glass-card rounded-2xl p-6">
+                        <h3 class="text-xl font-bold text-white mb-4">Notifications</h3>
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-white font-medium">New Proposals</p>
+                                    <p class="text-sm text-gray-400">Get notified when new proposals are created</p>
+                                </div>
+                                <label class="relative inline-block w-12 h-6">
+                                    <input type="checkbox" class="sr-only peer" checked>
+                                    <div class="w-full h-full bg-gray-600 peer-checked:bg-purple-600 rounded-full peer transition-all cursor-pointer"></div>
+                                    <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full peer-checked:translate-x-6 transition-all"></div>
+                                </label>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-white font-medium">Voting Reminders</p>
+                                    <p class="text-sm text-gray-400">Remind me about proposals ending soon</p>
+                                </div>
+                                <label class="relative inline-block w-12 h-6">
+                                    <input type="checkbox" class="sr-only peer" checked>
+                                    <div class="w-full h-full bg-gray-600 peer-checked:bg-purple-600 rounded-full peer transition-all cursor-pointer"></div>
+                                    <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full peer-checked:translate-x-6 transition-all"></div>
+                                </label>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-white font-medium">Vote Confirmations</p>
+                                    <p class="text-sm text-gray-400">Confirm when my vote is recorded on-chain</p>
+                                </div>
+                                <label class="relative inline-block w-12 h-6">
+                                    <input type="checkbox" class="sr-only peer">
+                                    <div class="w-full h-full bg-gray-600 peer-checked:bg-purple-600 rounded-full peer transition-all cursor-pointer"></div>
+                                    <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full peer-checked:translate-x-6 transition-all"></div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Appearance Section -->
+                    <div class="glass-card rounded-2xl p-6">
+                        <h3 class="text-xl font-bold text-white mb-4">Appearance</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="text-sm text-gray-400 mb-2 block">Theme</label>
+                                <div class="flex gap-3">
+                                    <button class="flex-1 bg-purple-600/30 border-2 border-purple-500 rounded-lg p-3 text-white font-medium">
+                                        🌙 Dark Mode
+                                    </button>
+                                    <button class="flex-1 bg-black/30 border-2 border-gray-700 rounded-lg p-3 text-gray-400 font-medium hover:border-gray-500">
+                                        ☀️ Light Mode
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- About Section -->
+                    <div class="glass-card rounded-2xl p-6">
+                        <h3 class="text-xl font-bold text-white mb-4">About</h3>
+                        <div class="space-y-2 text-gray-300">
+                            <p><strong>Version:</strong> 1.0.0</p>
+                            <p><strong>Contract:</strong> <span class="font-mono text-xs text-purple-300">Celo Alfajores Testnet</span></p>
+                            <p><strong>Built with:</strong> Ethers.js v5.7.2, Tailwind CSS, Chart.js</p>
+                        </div>
+                        <div class="mt-4 pt-4 border-t border-gray-700">
+                            <a href="https://docs.celo.org/" target="_blank" class="text-purple-400 hover:text-purple-300 text-sm mr-4">Documentation</a>
+                            <a href="https://github.com" target="_blank" class="text-purple-400 hover:text-purple-300 text-sm mr-4">GitHub</a>
+                            <a href="https://discord.gg/celo" target="_blank" class="text-purple-400 hover:text-purple-300 text-sm">Support</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Vote Detail View -->
+            <div id="voteView" class="hidden">
+                <button id="backToDashboard" class="mb-6 text-purple-400 hover:text-purple-300 flex items-center space-x-2 transition-all">
+                    <span>←</span>
+                    <span>Back to Dashboard</span>
+                </button>
+
+                <div class="glass-card rounded-2xl p-8 max-w-4xl">
+                    <div class="flex justify-between items-start mb-6">
+                        <div>
+                            <span class="status-badge status-active mb-3 inline-block">ACTIVE</span>
+                            <h2 id="proposalTitle" class="text-4xl font-bold text-white mb-2">Proposal Title</h2>
+                            <p class="text-gray-400">Proposal #<span id="proposalId">1</span></p>
+                        </div>
+                    </div>
+
+                    <div class="mb-8">
+                        <h4 class="text-sm font-semibold text-gray-400 uppercase mb-2">Description</h4>
+                        <p id="proposalDescription" class="text-gray-200 leading-relaxed text-lg">
+                            Proposal description will appear here...
+                        </p>
+                    </div>
+
+                    <!-- Voting Results -->
+                    <div class="mb-8">
+                        <h4 class="text-sm font-semibold text-gray-400 uppercase mb-4">Current Results</h4>
+                        
+                        <!-- Yes Votes -->
+                        <div class="mb-4">
+                            <div class="flex justify-between mb-2">
+                                <span class="text-green-400 font-semibold">Yes Votes</span>
+                                <span id="yesVotes" class="text-white font-bold">0</span>
+                            </div>
+                            <div class="w-full bg-gray-800 rounded-full h-4 overflow-hidden">
+                                <div id="yesBar" class="progress-bar-yes h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <!-- No Votes -->
+                        <div class="mb-6">
+                            <div class="flex justify-between mb-2">
+                                <span class="text-red-400 font-semibold">No Votes</span>
+                                <span id="noVotes" class="text-white font-bold">0</span>
+                            </div>
+                            <div class="w-full bg-gray-800 rounded-full h-4 overflow-hidden">
+                                <div id="noBar" class="progress-bar-no h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <!-- Chart -->
+                        <div class="bg-black/30 rounded-xl p-6">
+                            <canvas id="votingChart" height="80"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Voting Status Message -->
+                    <div id="votingStatus" class="hidden mb-6 p-4 rounded-lg"></div>
+
+                    <!-- Voting Buttons -->
+                    <div class="flex gap-4">
+                        <button id="voteYesBtn" class="btn-yes flex-1 py-4 rounded-xl font-bold text-white text-lg transition-all">
+                            ✓ Vote YES
+                        </button>
+                        <button id="voteNoBtn" class="btn-no flex-1 py-4 rounded-xl font-bold text-white text-lg transition-all">
+                            ✗ Vote NO
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // ==================== CONTRACT CONFIGURATION ====================
+        // TODO: Update this address after deploying the smart contract
+        const contractAddress = "PUT_ADDRESS_HERE";
+        
+        // Contract ABI
+        const contractABI = [
+            "function vote(uint256 proposalId, bool support) public",
+            "function getProposalInfo(uint256 proposalId) public view returns (string memory title, string memory description, uint256 yesVotes, uint256 noVotes, bool isActive)",
+            "function hasVoted(uint256 proposalId, address voter) public view returns (bool)",
+            "function proposals(uint256) public view returns (string title, string description, uint256 yesVotes, uint256 noVotes, bool isActive)",
+            "event Voted(address indexed voter, uint256 indexed proposalId, bool support)"
+        ];
+
+        // Celo Alfajores Testnet Configuration
+        const CELO_ALFAJORES = {
+            chainId: '0xaef3', // 44787 in hex
+            chainName: 'Celo Alfajores Testnet',
+            nativeCurrency: {
+                name: 'CELO',
+                symbol: 'CELO',
+                decimals: 18
+            },
+            rpcUrls: ['https://alfajores-forno.celo-testnet.org'],
+            blockExplorerUrls: ['https://alfajores.celoscan.io/']
+        };
+
+        // ==================== GLOBAL STATE ====================
+        let provider = null;
+        let signer = null;
+        let contract = null;
+        let userAddress = null;
+        let currentProposalId = null;
+        let votingChart = null;
+
+        // Mock proposal data (will be replaced with contract data in production)
+        const mockProposals = [
+            {
+                id: 0,
+                title: "Fund Project A: DeFi Integration",
+                description: "Allocate $50,000 from the treasury to develop a comprehensive DeFi integration module for seamless cross-chain operations. This will enable users to interact with multiple DeFi protocols directly from our platform.",
+                yesVotes: 245,
+                noVotes: 89,
+                isActive: true
+            },
+            {
+                id: 1,
+                title: "Change Protocol Fee Structure",
+                description: "Reduce transaction fees from 0.5% to 0.3% to improve competitiveness and attract more users to the platform. This change is expected to increase transaction volume by 40% based on market analysis.",
+                yesVotes: 312,
+                noVotes: 156,
+                isActive: true
+            },
+            {
+                id: 2,
+                title: "Marketing Campaign Budget",
+                description: "Approve $30,000 budget for Q1 2026 marketing campaign focused on social media and community growth initiatives. The campaign will target emerging markets in Southeast Asia and Latin America.",
+                yesVotes: 198,
+                noVotes: 203,
+                isActive: true
+            },
+            {
+                id: 3,
+                title: "Add New Governance Member",
+                description: "Elect Alice Walker (0x742d...3f4a) as a new core governance member with voting rights on protocol upgrades. Alice has 10+ years of blockchain experience and has contributed significantly to the community.",
+                yesVotes: 421,
+                noVotes: 67,
+                isActive: true
+            }
+        ];
+
+        // ==================== WALLET CONNECTION ====================
+        async function connectWallet() {
+            try {
+                if (typeof window.ethereum === 'undefined') {
+                    // Redirect to MetaMask download page
+                    const userConfirmed = confirm('MetaMask is not installed. Would you like to download it now?');
+                    if (userConfirmed) {
+                        window.open('https://metamask.io/download/', '_blank');
+                    }
+                    return;
+                }
+
+                // Request account access
+                const accounts = await window.ethereum.request({ 
+                    method: 'eth_requestAccounts' 
+                });
+
+                userAddress = accounts[0];
+
+                // Initialize ethers provider and signer
+                provider = new ethers.providers.Web3Provider(window.ethereum);
+                signer = provider.getSigner();
+
+                // Check and switch to Celo Alfajores
+                await switchToCeloAlfajores();
+
+                // Initialize contract
+                if (contractAddress !== "PUT_ADDRESS_HERE") {
+                    contract = new ethers.Contract(contractAddress, contractABI, signer);
+                }
+
+                // Update UI
+                updateWalletUI();
+
+                console.log('✅ Wallet connected:', userAddress);
+            } catch (error) {
+                console.error('❌ Error connecting wallet:', error);
+                alert('Failed to connect wallet: ' + error.message);
+            }
+        }
+
+        async function switchToCeloAlfajores() {
+            try {
+                // Try to switch to Celo Alfajores
+                await window.ethereum.request({
+                    method: 'wallet_switchEthereumChain',
+                    params: [{ chainId: CELO_ALFAJORES.chainId }],
+                });
+                console.log('✅ Switched to Celo Alfajores Testnet');
+            } catch (switchError) {
+                // This error code indicates that the chain has not been added to MetaMask
+                if (switchError.code === 4902) {
+                    try {
+                        await window.ethereum.request({
+                            method: 'wallet_addEthereumChain',
+                            params: [CELO_ALFAJORES],
+                        });
+                        console.log('✅ Celo Alfajores Testnet added and switched');
+                    } catch (addError) {
+                        console.error('❌ Error adding Celo Alfajores:', addError);
+                        throw new Error('Failed to add Celo Alfajores network');
+                    }
+                } else {
+                    console.error('❌ Error switching network:', switchError);
+                    throw switchError;
+                }
+            }
+        }
+
+        function updateWalletUI() {
+            document.getElementById('connectWalletBtn').textContent = 'Connected ✓';
+            document.getElementById('connectWalletBtn').classList.add('neon-glow');
+            document.getElementById('walletInfo').classList.remove('hidden');
+            document.getElementById('walletAddress').textContent = 
+                userAddress.slice(0, 6) + '...' + userAddress.slice(-4);
+        }
+
+        // ==================== VIEW NAVIGATION ====================
+        function showDashboard() {
+            document.getElementById('dashboardView').classList.remove('hidden');
+            document.getElementById('voteView').classList.add('hidden');
+            document.getElementById('historyView').classList.add('hidden');
+            document.getElementById('settingsView').classList.add('hidden');
+            updateNavButtons('navDashboard');
+        }
+
+        function showHistory() {
+            document.getElementById('dashboardView').classList.add('hidden');
+            document.getElementById('voteView').classList.add('hidden');
+            document.getElementById('historyView').classList.remove('hidden');
+            document.getElementById('settingsView').classList.add('hidden');
+            updateNavButtons('navHistory');
+        }
+
+        function showSettings() {
+            document.getElementById('dashboardView').classList.add('hidden');
+            document.getElementById('voteView').classList.add('hidden');
+            document.getElementById('historyView').classList.add('hidden');
+            document.getElementById('settingsView').classList.remove('hidden');
+            updateNavButtons('navSettings');
+            
+            // Update wallet address in settings if connected
+            if (userAddress) {
+                document.getElementById('settingsWalletAddress').textContent = 
+                    userAddress.slice(0, 6) + '...' + userAddress.slice(-4);
+            }
+        }
+
+        function updateNavButtons(activeId) {
+            // Remove active state from all nav buttons
+            ['navDashboard', 'navHistory', 'navSettings'].forEach(id => {
+                const btn = document.getElementById(id);
+                btn.classList.remove('bg-purple-600/20', 'text-purple-300', 'font-medium');
+                btn.classList.add('text-gray-400');
+            });
+            
+            // Add active state to clicked button
+            const activeBtn = document.getElementById(activeId);
+            activeBtn.classList.remove('text-gray-400');
+            activeBtn.classList.add('bg-purple-600/20', 'text-purple-300', 'font-medium');
+        }
+
+        function showVoteView(proposalId) {
+            currentProposalId = proposalId;
+            const proposal = mockProposals[proposalId];
+
+            if (!proposal) {
+                alert('Proposal not found!');
+                return;
+            }
+
+            // Update proposal details
+            document.getElementById('proposalId').textContent = proposal.id + 1;
+            document.getElementById('proposalTitle').textContent = proposal.title;
+            document.getElementById('proposalDescription').textContent = proposal.description;
+
+            // Update vote counts
+            updateVoteDisplay(proposal.yesVotes, proposal.noVotes);
+
+            // Hide all views except vote view
+            document.getElementById('dashboardView').classList.add('hidden');
+            document.getElementById('historyView').classList.add('hidden');
+            document.getElementById('settingsView').classList.add('hidden');
+            document.getElementById('voteView').classList.remove('hidden');
+
+            // Initialize or update chart
+            initVotingChart(proposal.yesVotes, proposal.noVotes);
+
+            // Check if user already voted
+            checkVotingStatus(proposalId);
+        }
+
+        function updateVoteDisplay(yesVotes, noVotes) {
+            const total = yesVotes + noVotes;
+            const yesPercentage = total > 0 ? (yesVotes / total * 100).toFixed(1) : 0;
+            const noPercentage = total > 0 ? (noVotes / total * 100).toFixed(1) : 0;
+
+            document.getElementById('yesVotes').textContent = yesVotes;
+            document.getElementById('noVotes').textContent = noVotes;
+            document.getElementById('yesBar').style.width = yesPercentage + '%';
+            document.getElementById('noBar').style.width = noPercentage + '%';
+        }
+
+        // ==================== VOTING LOGIC ====================
+        async function voteOnProposal(support) {
+            if (!userAddress) {
+                alert('⚠️ Please connect your wallet first!');
+                return;
+            }
+
+            if (currentProposalId === null) {
+                alert('⚠️ No proposal selected!');
+                return;
+            }
+
+            try {
+                // Check if contract is deployed
+                if (contractAddress === "PUT_ADDRESS_HERE") {
+                    // Simulate voting for demo
+                    simulateVote(support);
+                    return;
+                }
+
+                // Check if user already voted
+                const alreadyVoted = await contract.hasVoted(currentProposalId, userAddress);
+                if (alreadyVoted) {
+                    showVotingStatus('You have already voted on this proposal!', 'error');
+                    return;
+                }
+
+                // Show pending status
+                showVotingStatus('Transaction pending... Please confirm in your wallet.', 'pending');
+
+                // Execute vote transaction
+                const tx = await contract.vote(currentProposalId, support);
+                
+                showVotingStatus('Transaction submitted! Waiting for confirmation...', 'pending');
+                
+                // Wait for transaction confirmation
+                const receipt = await tx.wait();
+
+                console.log('✅ Vote transaction confirmed:', receipt);
+
+                // Update UI
+                showVotingStatus('✅ Vote successfully recorded!', 'success');
+
+                // Refresh proposal data
+                await refreshProposalData(currentProposalId);
+
+            } catch (error) {
+                console.error('❌ Error voting:', error);
+                let errorMessage = 'Failed to submit vote: ';
+                
+                if (error.code === 4001) {
+                    errorMessage += 'Transaction rejected by user';
+                } else if (error.code === -32603) {
+                    errorMessage += 'Internal error. Please check your wallet balance.';
+                } else {
+                    errorMessage += error.message;
+                }
+                
+                showVotingStatus(errorMessage, 'error');
+            }
+        }
+
+        function simulateVote(support) {
+            const proposal = mockProposals[currentProposalId];
+            
+            // Update mock data
+            if (support) {
+                proposal.yesVotes++;
+            } else {
+                proposal.noVotes++;
+            }
+
+            // Update display
+            updateVoteDisplay(proposal.yesVotes, proposal.noVotes);
+            updateChart(proposal.yesVotes, proposal.noVotes);
+
+            // Show success message
+            showVotingStatus(
+                `✅ Vote recorded! You voted ${support ? 'YES' : 'NO'} on this proposal.`,
+                'success'
+            );
+
+            // Disable voting buttons
+            disableVotingButtons();
+        }
+
+        async function refreshProposalData(proposalId) {
+            try {
+                const proposalInfo = await contract.getProposalInfo(proposalId);
+                const yesVotes = proposalInfo.yesVotes.toNumber();
+                const noVotes = proposalInfo.noVotes.toNumber();
+
+                updateVoteDisplay(yesVotes, noVotes);
+                updateChart(yesVotes, noVotes);
+                
+                disableVotingButtons();
+            } catch (error) {
+                console.error('Error refreshing proposal data:', error);
+            }
+        }
+
+        async function checkVotingStatus(proposalId) {
+            if (!userAddress || contractAddress === "PUT_ADDRESS_HERE") {
+                return;
+            }
+
+            try {
+                const alreadyVoted = await contract.hasVoted(proposalId, userAddress);
+                if (alreadyVoted) {
+                    showVotingStatus('You have already voted on this proposal.', 'info');
+                    disableVotingButtons();
+                }
+            } catch (error) {
+                console.error('Error checking voting status:', error);
+            }
+        }
+
+        function showVotingStatus(message, type) {
+            const statusDiv = document.getElementById('votingStatus');
+            statusDiv.classList.remove('hidden');
+            
+            // Remove previous type classes
+            statusDiv.classList.remove('bg-green-500/20', 'border-green-500', 'text-green-300',
+                                      'bg-red-500/20', 'border-red-500', 'text-red-300',
+                                      'bg-yellow-500/20', 'border-yellow-500', 'text-yellow-300',
+                                      'bg-blue-500/20', 'border-blue-500', 'text-blue-300');
+            
+            statusDiv.classList.add('border');
+            
+            if (type === 'success') {
+                statusDiv.classList.add('bg-green-500/20', 'border-green-500', 'text-green-300');
+            } else if (type === 'error') {
+                statusDiv.classList.add('bg-red-500/20', 'border-red-500', 'text-red-300');
+            } else if (type === 'pending') {
+                statusDiv.classList.add('bg-yellow-500/20', 'border-yellow-500', 'text-yellow-300');
+            } else {
+                statusDiv.classList.add('bg-blue-500/20', 'border-blue-500', 'text-blue-300');
+            }
+            
+            statusDiv.textContent = message;
+        }
+
+        function disableVotingButtons() {
+            document.getElementById('voteYesBtn').disabled = true;
+            document.getElementById('voteNoBtn').disabled = true;
+            document.getElementById('voteYesBtn').classList.add('opacity-50', 'cursor-not-allowed');
+            document.getElementById('voteNoBtn').classList.add('opacity-50', 'cursor-not-allowed');
+        }
+
+        // ==================== CHART INITIALIZATION ====================
+        function initVotingChart(yesVotes, noVotes) {
+            const ctx = document.getElementById('votingChart').getContext('2d');
+            
+            if (votingChart) {
+                updateChart(yesVotes, noVotes);
+                return;
+            }
+
+            votingChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Yes Votes', 'No Votes'],
+                    datasets: [{
+                        data: [yesVotes, noVotes],
+                        backgroundColor: [
+                            'rgba(16, 185, 129, 0.8)',
+                            'rgba(239, 68, 68, 0.8)'
+                        ],
+                        borderColor: [
+                            'rgba(16, 185, 129, 1)',
+                            'rgba(239, 68, 68, 1)'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom',
+                            labels: {
+                                color: '#ffffff',
+                                font: {
+                                    size: 14,
+                                    family: 'Inter'
+                                },
+                                padding: 20
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            titleColor: '#ffffff',
+                            bodyColor: '#ffffff',
+                            borderColor: 'rgba(168, 85, 247, 0.5)',
+                            borderWidth: 1
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateChart(yesVotes, noVotes) {
+            if (votingChart) {
+                votingChart.data.datasets[0].data = [yesVotes, noVotes];
+                votingChart.update();
+            }
+        }
+
+        // ==================== EVENT LISTENERS ====================
+        document.addEventListener('DOMContentLoaded', function() {
+            // Connect Wallet Button
+            document.getElementById('connectWalletBtn').addEventListener('click', connectWallet);
+
+            // Navigation
+            document.getElementById('navDashboard').addEventListener('click', showDashboard);
+            document.getElementById('navHistory').addEventListener('click', showHistory);
+            document.getElementById('navSettings').addEventListener('click', showSettings);
+            document.getElementById('backToDashboard').addEventListener('click', showDashboard);
+
+            // Proposal Cards - Click to view details
+            document.querySelectorAll('.proposal-card').forEach(card => {
+                card.addEventListener('click', function() {
+                    const proposalId = parseInt(this.getAttribute('data-proposal-id'));
+                    showVoteView(proposalId);
+                });
+            });
+
+            // Voting Buttons
+            document.getElementById('voteYesBtn').addEventListener('click', function() {
+                voteOnProposal(true);
+            });
+
+            document.getElementById('voteNoBtn').addEventListener('click', function() {
+                voteOnProposal(false);
+            });
+
+            // Listen for account changes
+            if (window.ethereum) {
+                window.ethereum.on('accountsChanged', function(accounts) {
+                    if (accounts.length === 0) {
+                        console.log('Please connect to MetaMask.');
+                        location.reload();
+                    } else {
+                        userAddress = accounts[0];
+                        updateWalletUI();
+                    }
+                });
+
+                window.ethereum.on('chainChanged', function(chainId) {
+                    console.log('Network changed to:', chainId);
+                    location.reload();
+                });
+            }
+        });
+    </script>
+
+</body>
+</html>
