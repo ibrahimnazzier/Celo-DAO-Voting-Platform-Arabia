@@ -342,7 +342,7 @@
                             <div>
                                 <label class="text-sm text-gray-400 mb-2 block">Network</label>
                                 <div class="bg-black/30 rounded-lg p-3">
-                                    <span class="text-white">Celo Alfajores Testnet</span>
+                                    <span class="text-white">Celo Sepolia Testnet</span>
                                     <span class="ml-2 text-xs text-green-400">● Connected</span>
                                 </div>
                             </div>
@@ -412,7 +412,7 @@
                         <h3 class="text-xl font-bold text-white mb-4">About</h3>
                         <div class="space-y-2 text-gray-300">
                             <p><strong>Version:</strong> 1.0.0</p>
-                            <p><strong>Contract:</strong> <span class="font-mono text-xs text-purple-300">Celo Alfajores Testnet</span></p>
+                            <p><strong>Contract:</strong> <span class="font-mono text-xs text-purple-300">Celo Sepolia Testnet</span></p>
                             <p><strong>Built with:</strong> Ethers.js v5.7.2, Tailwind CSS, Chart.js</p>
                         </div>
                         <div class="mt-4 pt-4 border-t border-gray-700">
@@ -499,8 +499,8 @@
 
     <script>
         // ==================== CONTRACT CONFIGURATION ====================
-        // TODO: Update this address after deploying the smart contract
-        const contractAddress = "PUT_ADDRESS_HERE";
+        // Updated with deployed contract address and new Network (Celo Sepolia)
+        const contractAddress = "0x6ad6a13554bfd9df980eea3288b9b6e5a32b06f0";
         
         // Contract ABI
         const contractABI = [
@@ -511,17 +511,17 @@
             "event Voted(address indexed voter, uint256 indexed proposalId, bool support)"
         ];
 
-        // Celo Alfajores Testnet Configuration
-        const CELO_ALFAJORES = {
-            chainId: '0xaef3', // 44787 in hex
-            chainName: 'Celo Alfajores Testnet',
+        // Celo Sepolia Testnet Configuration (UPDATED)
+        const CELO_TESTNET_CONFIG = {
+            chainId: '0xaa044c', // 11142220 in hex for Celo Sepolia
+            chainName: 'Celo Sepolia Testnet',
             nativeCurrency: {
                 name: 'CELO',
                 symbol: 'CELO',
                 decimals: 18
             },
-            rpcUrls: ['https://alfajores-forno.celo-testnet.org'],
-            blockExplorerUrls: ['https://alfajores.celoscan.io/']
+            rpcUrls: ['https://forno.celo-sepolia.celo-testnet.org'],
+            blockExplorerUrls: ['https://sepolia.celoscan.io/']
         };
 
         // ==================== GLOBAL STATE ====================
@@ -532,7 +532,7 @@
         let currentProposalId = null;
         let votingChart = null;
 
-        // Mock proposal data (will be replaced with contract data in production)
+        // Mock proposal data (Fallback)
         const mockProposals = [
             {
                 id: 0,
@@ -572,7 +572,6 @@
         async function connectWallet() {
             try {
                 if (typeof window.ethereum === 'undefined') {
-                    // Redirect to MetaMask download page
                     const userConfirmed = confirm('MetaMask is not installed. Would you like to download it now?');
                     if (userConfirmed) {
                         window.open('https://metamask.io/download/', '_blank');
@@ -591,14 +590,12 @@
                 provider = new ethers.providers.Web3Provider(window.ethereum);
                 signer = provider.getSigner();
 
-                // Check and switch to Celo Alfajores
-                await switchToCeloAlfajores();
+                // Check and switch to Celo Sepolia
+                await switchToCeloTestnet();
 
                 // Initialize contract
-                if (contractAddress !== "PUT_ADDRESS_HERE") {
-                    contract = new ethers.Contract(contractAddress, contractABI, signer);
-                }
-
+                contract = new ethers.Contract(contractAddress, contractABI, signer);
+                
                 // Update UI
                 updateWalletUI();
 
@@ -609,26 +606,26 @@
             }
         }
 
-        async function switchToCeloAlfajores() {
+        async function switchToCeloTestnet() {
             try {
-                // Try to switch to Celo Alfajores
+                // Try to switch to Celo Sepolia
                 await window.ethereum.request({
                     method: 'wallet_switchEthereumChain',
-                    params: [{ chainId: CELO_ALFAJORES.chainId }],
+                    params: [{ chainId: CELO_TESTNET_CONFIG.chainId }],
                 });
-                console.log('✅ Switched to Celo Alfajores Testnet');
+                console.log('✅ Switched to Celo Sepolia Testnet');
             } catch (switchError) {
                 // This error code indicates that the chain has not been added to MetaMask
                 if (switchError.code === 4902) {
                     try {
                         await window.ethereum.request({
                             method: 'wallet_addEthereumChain',
-                            params: [CELO_ALFAJORES],
+                            params: [CELO_TESTNET_CONFIG],
                         });
-                        console.log('✅ Celo Alfajores Testnet added and switched');
+                        console.log('✅ Celo Sepolia Testnet added and switched');
                     } catch (addError) {
-                        console.error('❌ Error adding Celo Alfajores:', addError);
-                        throw new Error('Failed to add Celo Alfajores network');
+                        console.error('❌ Error adding Celo Sepolia:', addError);
+                        throw new Error('Failed to add Celo Sepolia network');
                     }
                 } else {
                     console.error('❌ Error switching network:', switchError);
@@ -677,14 +674,12 @@
         }
 
         function updateNavButtons(activeId) {
-            // Remove active state from all nav buttons
             ['navDashboard', 'navHistory', 'navSettings'].forEach(id => {
                 const btn = document.getElementById(id);
                 btn.classList.remove('bg-purple-600/20', 'text-purple-300', 'font-medium');
                 btn.classList.add('text-gray-400');
             });
             
-            // Add active state to clicked button
             const activeBtn = document.getElementById(activeId);
             activeBtn.classList.remove('text-gray-400');
             activeBtn.classList.add('bg-purple-600/20', 'text-purple-300', 'font-medium');
@@ -744,13 +739,6 @@
             }
 
             try {
-                // Check if contract is deployed
-                if (contractAddress === "PUT_ADDRESS_HERE") {
-                    // Simulate voting for demo
-                    simulateVote(support);
-                    return;
-                }
-
                 // Check if user already voted
                 const alreadyVoted = await contract.hasVoted(currentProposalId, userAddress);
                 if (alreadyVoted) {
@@ -793,30 +781,6 @@
             }
         }
 
-        function simulateVote(support) {
-            const proposal = mockProposals[currentProposalId];
-            
-            // Update mock data
-            if (support) {
-                proposal.yesVotes++;
-            } else {
-                proposal.noVotes++;
-            }
-
-            // Update display
-            updateVoteDisplay(proposal.yesVotes, proposal.noVotes);
-            updateChart(proposal.yesVotes, proposal.noVotes);
-
-            // Show success message
-            showVotingStatus(
-                `✅ Vote recorded! You voted ${support ? 'YES' : 'NO'} on this proposal.`,
-                'success'
-            );
-
-            // Disable voting buttons
-            disableVotingButtons();
-        }
-
         async function refreshProposalData(proposalId) {
             try {
                 const proposalInfo = await contract.getProposalInfo(proposalId);
@@ -833,7 +797,7 @@
         }
 
         async function checkVotingStatus(proposalId) {
-            if (!userAddress || contractAddress === "PUT_ADDRESS_HERE") {
+            if (!userAddress) {
                 return;
             }
 
@@ -852,7 +816,6 @@
             const statusDiv = document.getElementById('votingStatus');
             statusDiv.classList.remove('hidden');
             
-            // Remove previous type classes
             statusDiv.classList.remove('bg-green-500/20', 'border-green-500', 'text-green-300',
                                       'bg-red-500/20', 'border-red-500', 'text-red-300',
                                       'bg-yellow-500/20', 'border-yellow-500', 'text-yellow-300',
@@ -952,7 +915,7 @@
             document.getElementById('navSettings').addEventListener('click', showSettings);
             document.getElementById('backToDashboard').addEventListener('click', showDashboard);
 
-            // Proposal Cards - Click to view details
+            // Proposal Cards
             document.querySelectorAll('.proposal-card').forEach(card => {
                 card.addEventListener('click', function() {
                     const proposalId = parseInt(this.getAttribute('data-proposal-id'));
@@ -973,7 +936,6 @@
             if (window.ethereum) {
                 window.ethereum.on('accountsChanged', function(accounts) {
                     if (accounts.length === 0) {
-                        console.log('Please connect to MetaMask.');
                         location.reload();
                     } else {
                         userAddress = accounts[0];
@@ -982,7 +944,6 @@
                 });
 
                 window.ethereum.on('chainChanged', function(chainId) {
-                    console.log('Network changed to:', chainId);
                     location.reload();
                 });
             }
