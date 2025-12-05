@@ -353,18 +353,18 @@
 
     <script>
         // ==================== CONTRACT CONFIGURATION ====================
-         const contractAddress = "0x4d74e29b44f9e5e9391bc395792e6f3b765c7eb4";
+        // عنوان العقد الصحيح الأخير
+        const contractAddress = "0x4d74e29b44f9e5e9391bc395792e6f3b765c7eb4";
         
-        // Updated ABI with createProposal
+        // ABI محدث عشان يعرف يجيب البيانات صح
         const contractABI = [
             "function vote(uint256 proposalId, bool support) public",
             "function createProposal(string memory title, string memory description) public",
             "function getProposalInfo(uint256 proposalId) public view returns (string memory title, string memory description, uint256 yesVotes, uint256 noVotes, bool isActive)",
             "function hasVoted(uint256 proposalId, address voter) public view returns (bool)",
-            "event Voted(address indexed voter, uint256 indexed proposalId, bool support)"
+            "function proposalCount() public view returns (uint256)"
         ];
 
-        // Celo Sepolia Testnet
         const CELO_TESTNET_CONFIG = {
             chainId: '0xaa044c',
             chainName: 'Celo Sepolia Testnet',
@@ -373,251 +373,184 @@
             blockExplorerUrls: ['https://sepolia.celoscan.io/']
         };
 
-        let provider = null;
-        let signer = null;
-        let contract = null;
-        let userAddress = null;
+        let provider, signer, contract, userAddress;
         let currentProposalId = null;
         let votingChart = null;
 
-        // Mock proposals for UI demo
-        const mockProposals = [
-            { id: 0, title: "Fund Project A: DeFi Integration", description: "Allocate funds for DeFi integration.", yesVotes: 245, noVotes: 89, isActive: true },
-            { id: 1, title: "Change Protocol Fee Structure", description: "Reduce fees to 0.3%.", yesVotes: 312, noVotes: 156, isActive: true }
-        ];
+        // ==================== CORE FUNCTIONS ====================
 
-        // ==================== WALLET CONNECTION ====================
         async function connectWallet() {
+            if (!window.ethereum) return alert("Please install MetaMask!");
             try {
-                if (typeof window.ethereum === 'undefined') {
-                    if(confirm('MetaMask not found. Install it?')) window.open('https://metamask.io/download/', '_blank');
-                    return;
-                }
-                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-                userAddress = accounts[0];
+                await window.ethereum.request({ method: 'eth_requestAccounts' });
                 
-                // Force network switch
+                // Switch Network
                 try {
                     await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: CELO_TESTNET_CONFIG.chainId }] });
-                } catch (switchError) {
-                    if (switchError.code === 4902) {
-                        await window.ethereum.request({ method: 'wallet_addEthereumChain', params: [CELO_TESTNET_CONFIG] });
-                    }
+                } catch (error) {
+                    if (error.code === 4902) await window.ethereum.request({ method: 'wallet_addEthereumChain', params: [CELO_TESTNET_CONFIG] });
                 }
 
                 provider = new ethers.providers.Web3Provider(window.ethereum);
                 signer = provider.getSigner();
+                userAddress = await signer.getAddress();
                 contract = new ethers.Contract(contractAddress, contractABI, signer);
+
                 updateWalletUI();
-            } catch (error) {
-                console.error('Connect error:', error);
-                alert('Connection failed: ' + error.message);
+                loadProposals(); // Load Real Data
+            } catch (err) {
+                console.error(err);
+                alert("Connection Error: " + err.message);
+            }
+        }
+
+        // هذه هي الدالة التي تم تعديلها لإظهار المقترحات الحقيقية
+        async function loadProposals() {
+            const grid = document.getElementById('proposalsGrid');
+            grid.innerHTML = '<div class="text-white">Loading proposals from blockchain...</div>';
+
+            if (!contract) return;
+
+            try {
+                // 1. Get total count
+                const count = await contract.proposalCount();
+                const total = count.toNumber();
+
+                grid.innerHTML = ''; // Clear loading
+
+                if (total === 0) {
+                    grid.innerHTML = '<div class="text-gray-400">No proposals found. Create one!</div>';
+                    return;
+                }
+
+                // 2. Loop and fetch each proposal
+                for (let i = 0; i < total; i++) {
+                    const prop = await contract.getProposalInfo(i);
+                    
+                    const card = document.createElement('div');
+                    card.className = 'glass-card p-6 rounded-2xl cursor-pointer hover:bg-white/5 transition';
+                    card.onclick = () => openProposal(i, prop.title, prop.description, prop.yesVotes, prop.noVotes);
+                    
+                    card.innerHTML = `
+                        <div class="flex justify-between mb-4">
+                            <span class="status-badge status-active">ACTIVE</span>
+                            <span class="text-gray-400">#${i+1}</span>
+                        </div>
+                        <h3 class="text-xl font-bold text-white mb-2">${prop.title}</h3>
+                        <p class="text-gray-400 text-sm line-clamp-2">${prop.description}</p>
+                        <div class="mt-4 flex gap-4 text-sm">
+                            <span class="text-green-400">👍 ${prop.yesVotes}</span>
+                            <span class="text-red-400">👎 ${prop.noVotes}</span>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                }
+            } catch (e) {
+                console.error("Error loading proposals:", e);
+                grid.innerHTML = '<div class="text-red-400">Error loading data. Make sure you are on Celo Sepolia.</div>';
             }
         }
 
         function updateWalletUI() {
-            document.getElementById('connectWalletBtn').textContent = 'Connected ✓';
-            document.getElementById('connectWalletBtn').classList.add('neon-glow');
+            document.getElementById('connectWalletBtn').innerText = "Connected";
             document.getElementById('walletInfo').classList.remove('hidden');
-            document.getElementById('walletAddress').textContent = userAddress.slice(0, 6) + '...' + userAddress.slice(-4);
-            if (document.getElementById('settingsWalletAddress')) {
-                document.getElementById('settingsWalletAddress').textContent = userAddress.slice(0, 6) + '...' + userAddress.slice(-4);
-            }
+            document.getElementById('walletAddress').innerText = userAddress.slice(0,6) + '...' + userAddress.slice(-4);
         }
 
-        // ==================== NAVIGATION ====================
-        function showDashboard() {
-            hideAllViews();
-            document.getElementById('dashboardView').classList.remove('hidden');
-            updateNavButtons('navDashboard');
-        }
-        function showCreate() {
-            hideAllViews();
-            document.getElementById('createView').classList.remove('hidden');
-            updateNavButtons('navCreate');
-        }
-        function showHistory() {
-            hideAllViews();
-            document.getElementById('historyView').classList.remove('hidden');
-            updateNavButtons('navHistory');
-        }
-        function showSettings() {
-            hideAllViews();
-            document.getElementById('settingsView').classList.remove('hidden');
-            updateNavButtons('navSettings');
-        }
-        function hideAllViews() {
-            ['dashboardView', 'createView', 'historyView', 'settingsView', 'voteView'].forEach(id => {
-                document.getElementById(id).classList.add('hidden');
-            });
-        }
-        function updateNavButtons(activeId) {
-            ['navDashboard', 'navCreate', 'navHistory', 'navSettings'].forEach(id => {
-                const btn = document.getElementById(id);
-                btn.classList.remove('bg-purple-600/20', 'text-purple-300', 'font-medium');
-                btn.classList.add('text-gray-400');
-            });
-            const activeBtn = document.getElementById(activeId);
-            activeBtn.classList.remove('text-gray-400');
-            activeBtn.classList.add('bg-purple-600/20', 'text-purple-300', 'font-medium');
-        }
+        // ==================== ACTIONS ====================
 
-        function showVoteView(proposalId) {
-            currentProposalId = proposalId;
-            // Use mock data if contract fetch not implemented for list yet
-            const proposal = mockProposals[proposalId] || mockProposals[0]; 
-
-            document.getElementById('proposalId').textContent = proposal.id + 1;
-            document.getElementById('proposalTitle').textContent = proposal.title;
-            document.getElementById('proposalDescription').textContent = proposal.description;
-            updateVoteDisplay(proposal.yesVotes, proposal.noVotes);
-            initVotingChart(proposal.yesVotes, proposal.noVotes);
-
-            hideAllViews();
-            document.getElementById('voteView').classList.remove('hidden');
-            
-            // Check status safely
-            checkVotingStatus(proposalId);
-        }
-
-        function updateVoteDisplay(yesVotes, noVotes) {
-            const total = yesVotes + noVotes;
-            const yesPercentage = total > 0 ? (yesVotes / total * 100).toFixed(1) : 0;
-            const noPercentage = total > 0 ? (noVotes / total * 100).toFixed(1) : 0;
-
-            document.getElementById('yesVotes').textContent = yesVotes;
-            document.getElementById('noVotes').textContent = noVotes;
-            document.getElementById('yesBar').style.width = yesPercentage + '%';
-            document.getElementById('noBar').style.width = noPercentage + '%';
-        }
-
-        // ==================== CONTRACT LOGIC ====================
-        
-        // 1. CREATE PROPOSAL
         async function createProposal() {
-            if (!contract) return alert("Please connect wallet first!");
+            if (!contract) return alert("Connect wallet first!");
             const title = document.getElementById('newPropTitle').value;
             const desc = document.getElementById('newPropDesc').value;
             
-            if(!title || !desc) return alert("Please fill in all fields");
+            if(!title || !desc) return alert("Fill all fields");
 
             try {
-                const tx = await contract.createProposal(title, desc, { gasLimit: 500000 });
-                alert("Transaction sent! Please wait for confirmation.");
+                const tx = await contract.createProposal(title, desc, { gasLimit: 600000 });
+                alert("Transaction sent! Please wait...");
                 await tx.wait();
-                alert("Proposal Created Successfully!");
+                alert("Proposal Created! Reloading...");
+                
+                // Clear inputs and reload
+                document.getElementById('newPropTitle').value = '';
+                document.getElementById('newPropDesc').value = '';
                 showDashboard();
+                loadProposals(); 
             } catch (err) {
-                console.error(err);
-                alert("Error creating proposal: " + (err.reason || err.message));
+                alert("Error: " + (err.reason || err.message));
             }
         }
 
-        // 2. VOTE (Fixed Error Handling)
-        async function voteOnProposal(support) {
-            if (!contract) return alert('⚠️ Please connect your wallet first!');
-
-            // Skip hasVoted check here if it causes issues, we rely on contract revert or try/catch
-            showVotingStatus('Transaction pending... Please confirm in your wallet.', 'pending');
+        async function vote(support) {
+            if (!contract) return alert("Connect wallet first!");
+            const status = document.getElementById('votingStatus');
+            status.classList.remove('hidden');
+            status.innerText = "⏳ Processing vote...";
 
             try {
                 const tx = await contract.vote(currentProposalId, support, { gasLimit: 300000 });
-                showVotingStatus('Transaction submitted! Waiting for confirmation...', 'pending');
+                status.innerText = "Wait for confirmation...";
                 await tx.wait();
-                showVotingStatus('✅ Vote successfully recorded!', 'success');
-                // Simulate update
-                setTimeout(() => {
-                   alert("Vote Confirmed!");
-                   showDashboard();
-                }, 1000);
-            } catch (error) {
-                console.error('Vote Error:', error);
-                // Handle the CALL_EXCEPTION gracefully
-                if(error.code === 'CALL_EXCEPTION' || error.message.includes('revert')) {
-                     showVotingStatus('⚠️ Error: Vote rejected. You may have already voted or proposal is closed.', 'error');
-                } else {
-                     showVotingStatus('Error: ' + error.message, 'error');
-                }
+                status.innerText = "✅ Voted Successfully!";
+                
+                // Refresh data
+                const prop = await contract.getProposalInfo(currentProposalId);
+                updateBars(prop.yesVotes, prop.noVotes);
+                loadProposals(); // Refresh grid too
+            } catch (err) {
+                console.error(err);
+                status.innerText = "❌ Error: " + (err.reason || "Transaction failed");
             }
         }
 
-        // 3. CHECK STATUS (Safe Mode)
-        async function checkVotingStatus(proposalId) {
-            if (!userAddress || !contract) return;
+        // ==================== UI HELPERS ====================
+
+        function openProposal(id, title, desc, yes, no) {
+            currentProposalId = id;
+            hideAll();
+            document.getElementById('voteView').classList.remove('hidden');
             
-            try {
-                // We wrap this in try-catch so if the contract fails (CALL_EXCEPTION), UI doesn't break
-                const alreadyVoted = await contract.hasVoted(proposalId, userAddress);
-                if (alreadyVoted) {
-                    showVotingStatus('You have already voted on this proposal.', 'info');
-                    disableVotingButtons();
-                }
-            } catch (error) {
-                console.warn("Contract read error (hasVoted):", error);
-                // Ignore error and let user try to vote
-            }
+            document.getElementById('proposalTitle').innerText = title;
+            document.getElementById('proposalDescription').innerText = desc;
+            // Convert BigNumber if needed
+            updateBars(yes.toNumber ? yes.toNumber() : yes, no.toNumber ? no.toNumber() : no);
         }
 
-        function showVotingStatus(message, type) {
-            const statusDiv = document.getElementById('votingStatus');
-            statusDiv.classList.remove('hidden');
-            statusDiv.className = 'mb-6 p-4 rounded-lg border'; // reset
+        function updateBars(yes, no) {
+            document.getElementById('yesVotes').innerText = yes;
+            document.getElementById('noVotes').innerText = no;
+            const total = yes + no;
+            document.getElementById('yesBar').style.width = total ? (yes/total)*100 + '%' : '0%';
+            document.getElementById('noBar').style.width = total ? (no/total)*100 + '%' : '0%';
             
-            if (type === 'success') statusDiv.classList.add('bg-green-500/20', 'border-green-500', 'text-green-300');
-            else if (type === 'error') statusDiv.classList.add('bg-red-500/20', 'border-red-500', 'text-red-300');
-            else if (type === 'pending') statusDiv.classList.add('bg-yellow-500/20', 'border-yellow-500', 'text-yellow-300');
-            else statusDiv.classList.add('bg-blue-500/20', 'border-blue-500', 'text-blue-300');
-            
-            statusDiv.textContent = message;
-        }
-
-        function disableVotingButtons() {
-            document.getElementById('voteYesBtn').disabled = true;
-            document.getElementById('voteNoBtn').disabled = true;
-            document.getElementById('voteYesBtn').classList.add('opacity-50', 'cursor-not-allowed');
-            document.getElementById('voteNoBtn').classList.add('opacity-50', 'cursor-not-allowed');
-        }
-
-        function initVotingChart(yes, no) {
+            // Update Chart
             const ctx = document.getElementById('votingChart').getContext('2d');
-            if (votingChart) { votingChart.destroy(); }
+            if (votingChart) votingChart.destroy();
             votingChart = new Chart(ctx, {
                 type: 'doughnut',
-                data: {
-                    labels: ['Yes', 'No'],
-                    datasets: [{
-                        data: [yes, no],
-                        backgroundColor: ['#10b981', '#ef4444'],
-                        borderWidth: 0
-                    }]
-                },
+                data: { labels: ['Yes', 'No'], datasets: [{ data: [yes, no], backgroundColor: ['#10b981', '#ef4444'], borderWidth: 0 }] },
                 options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { color: '#fff' } } } }
             });
         }
 
-        // ==================== EVENTS ====================
-        document.addEventListener('DOMContentLoaded', function() {
-            document.getElementById('connectWalletBtn').addEventListener('click', connectWallet);
-            document.getElementById('navDashboard').addEventListener('click', showDashboard);
-            document.getElementById('navCreate').addEventListener('click', showCreate); // New Event
-            document.getElementById('navHistory').addEventListener('click', showHistory);
-            document.getElementById('navSettings').addEventListener('click', showSettings);
-            document.getElementById('backToDashboard').addEventListener('click', showDashboard);
+        function showDashboard() { hideAll(); document.getElementById('dashboardView').classList.remove('hidden'); }
+        function showCreate() { hideAll(); document.getElementById('createView').classList.remove('hidden'); }
+        function showHistory() { hideAll(); document.getElementById('historyView').classList.remove('hidden'); }
+        function showSettings() { hideAll(); document.getElementById('settingsView').classList.remove('hidden'); }
+        
+        function hideAll() {
+            ['dashboardView', 'createView', 'historyView', 'settingsView', 'voteView'].forEach(id => 
+                document.getElementById(id).classList.add('hidden'));
+        }
 
-            document.querySelectorAll('.proposal-card').forEach(card => {
-                card.addEventListener('click', function() {
-                    showVoteView(parseInt(this.getAttribute('data-proposal-id')));
-                });
-            });
-
-            document.getElementById('voteYesBtn').addEventListener('click', () => voteOnProposal(true));
-            document.getElementById('voteNoBtn').addEventListener('click', () => voteOnProposal(false));
-
-            if (window.ethereum) {
-                window.ethereum.on('accountsChanged', () => location.reload());
-                window.ethereum.on('chainChanged', () => location.reload());
-            }
-        });
+        // Listeners
+        document.getElementById('connectWalletBtn').addEventListener('click', connectWallet);
+        document.getElementById('navDashboard').addEventListener('click', showDashboard);
+        document.getElementById('navCreate').addEventListener('click', showCreate);
+        document.getElementById('navHistory').addEventListener('click', showHistory);
+        document.getElementById('navSettings').addEventListener('click', showSettings);
+        document.getElementById('backToDashboard').addEventListener('click', showDashboard);
     </script>
 </body>
 </html>
